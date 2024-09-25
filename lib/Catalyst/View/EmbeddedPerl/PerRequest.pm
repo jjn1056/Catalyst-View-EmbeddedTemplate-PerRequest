@@ -6,9 +6,6 @@ use Template::EmbeddedPerl;
 
 extends 'Catalyst::View::BasePerRequest';
 
-our $VERSION = 0.001001;
-eval $VERSION;
-
 # Args that get passed cleanly to Template::EmbeddedPerl
 my @temple_args = qw(
   open_tag close_tag expr_marker line_start  
