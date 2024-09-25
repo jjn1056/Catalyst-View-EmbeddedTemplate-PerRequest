@@ -13,7 +13,7 @@ eval $VERSION;
 my @temple_args = qw(
   open_tag close_tag expr_marker line_start  
   template_extension auto_flatten_expr prepend
-  use_cache);
+  use_cache auto_escape);
 
 # methods we proxy from the temple object
 my @proxy_methods = qw(
@@ -301,6 +301,19 @@ extra work, but over time I think you will have a much more sustainable, maintai
 application.  Review the documentation, test cases and example applications and decide
 for yourself.
 
+=head1 HTML ESCAPING
+
+By default the view will escape all output to prevent cross site scripting attacks.
+If you want to output raw HTML you can use the C<raw> helper.  For example:
+
+  <%= raw $self->html %>
+
+See L<Template::EmbeddedPerl::SafeString> for more information.
+
+You can disable this feature by setting the C<auto_escape> option to false in the
+view configuration.  For example if you are not using this to generate HTML output
+you might not want it.
+
 =head1 METHODS
 
 This class provides the following methods for public use:
@@ -359,14 +372,15 @@ See L<Catalyst::View::BasePerRequest/respond> for more information.
 
 See L<Catalyst::View::BasePerRequest/detach> for more information.
 
-=head1 METHODS PROVIDED BY L<Template::EmbeddedPerl>
+=head1 METHODS PROXIED FROM L<Template::EmbeddedPerl>
 
 This class proxies the following methods from L<Template::EmbeddedPerl>:
 
-L<Template::EmbeddedPerl/raw>, L<Template::EmbeddedPerl/safe>, L<Template::EmbeddedPerl/safe_concat>,
-L<Template::EmbeddedPerl/html_escape>, L<Template::EmbeddedPerl/url_encode>, 
-L<Template::EmbeddedPerl/escape_javascript>, L<Template::EmbeddedPerl/uri_escape>,
-L<Template::EmbeddedPerl/trim>, L<Template::EmbeddedPerl/mtrim>.
+  raw safe safe_concat html_escape url_encode
+  escape_javascript uri_escape trim mtrim
+
+See L<Template::EmbeddedPerl/HELPER-FUNCTIONS> (these are available as template
+helpers and as methods on the view object).
 
 =head1 CONFIGURATION
 
@@ -395,7 +409,7 @@ The following configuration options are passed thru to L<Template::EmbeddedPerl>
 
   open_tag close_tag expr_marker line_start  
   template_extension auto_flatten_expr prepend
-  use_cache
+  use_cache auto_escape
 
 =head1 HELPERS
 
@@ -438,7 +452,15 @@ Example:
 =head1 DEFAULT HELPERS
 
 The following default helpers are available in all templates, in addition to
-helpers that are default in L<Template::EmbeddedPerl> itself:
+helpers that are default in L<Template::EmbeddedPerl> itself (see 
+L<Template::EmbeddedPerl/HELPER-FUNCTIONS> for more information):
+
+B<Note:> Just to be clear, you don't have to write a helper for every method you
+want to call in your template.  You always get C<$self> and C<$c> in your template
+so you can call methods on the view object and the context object directly.  Personally
+my choice is to have helpers for things that are in my base view which are shared across
+all views and then call $self for things that are specific to the view.  This makes it
+easier for people to debug and understand the code IMHO.  
 
 =over 4
 
@@ -485,6 +507,73 @@ following the view's class name path.  The file will be a 'snake case' version o
 the view module name with a '.epl' extension.
 
 =back
+
+=head1 COOKBOOK
+
+Some ideas about how to use this view well
+
+=head2 Avoid complex logic in the view
+
+Instead of putting complex logic in the view, you can define a method on the
+view which accepts a callback to render the content.  This way you can keep
+the logic in the controller or model where it belongs.
+
+  package MyApp::View::MyView;
+
+  use Moose
+  extends 'Catalyst::View::EmbeddedPerl::PerRequest';
+
+  has 'person' => (is => 'ro', required => 1);
+
+  sub person_data {
+    my ($self, $content_cb) = @_;
+    my $content = $content_cb->($self->person->name, $self->person->age);
+    return "....@{[ $self->trim($content_cb->()) ]}....";
+  }
+
+  __PACKAGE__->meta->make_immutable;
+
+In your template:
+
+  %# Person info
+  <%= $self->person_data(sub($name, $age) {
+    <p>Name: <%= $name %></p>
+    <p>Age: <%= $age %></p>
+  }) %>
+
+=head2 Use a base view class
+
+If you have a lot of views that share common features, you can create a base view
+class that contains those features.  This way you can avoid repeating yourself
+and keep your code DRY.
+
+  package MyApp::View;
+
+  use Moose;
+  extends 'Catalyst::View::EmbeddedPerl::PerRequest';
+
+  sub helpers {
+    my ($class) = @_;
+    return (
+      format_date => sub {
+        my ($self, $c, $date) = @_;
+        return $date->strftime('%Y-%m-%d');
+      },
+    );
+  }
+
+  # Other shared view features such as methods, attributes, etc.
+
+  __PACKAGE__->meta->make_immutable;
+
+In your view modules:
+
+  package MyApp::View::MyView;
+
+  use Moose;
+  extends 'MyApp::View';
+
+  __PACKAGE__->meta->make_immutable;
 
 =head1 SEE ALSO
 
