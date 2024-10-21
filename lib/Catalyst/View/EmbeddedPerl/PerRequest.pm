@@ -338,18 +338,22 @@ Declare a view in your Catalyst application:
   use Moose;
   extends 'Catalyst::View::EmbeddedPerl::PerRequest';
 
-  has 'name' => (is => 'ro', isa => 'Str');
+  has 'name' => (is => 'ro', isa => 'Str', export=>1);
+
+  sub title :Helper { 'Hello Title' }
 
   __PACKAGE__->meta->make_immutable;
   __DATA__
-  <p>Hello <%= $self->name %></p>
+  <title><%= title() %></title>
+  <p>Hello <%= $name %></p>
 
 You can also use a standalone text file as a template.  This text file
 will be located in the same directory as the view module and will have
 a 'snake case' version of the view module name with a '.epl' extension.
 
   # In hello_name.epl
-  <p>Hello <%= $self->name %>!</p>
+  <title><%= title() %></title>
+  <p>Hello <%= $name %></p>
 
 In your Catalyst controller:
 
@@ -360,6 +364,7 @@ In your Catalyst controller:
 
 Produces the following output:
 
+  <title>Hello Title</title>
   <p>Hello Perl Hacker!</p>
 
 =head1 DESCRIPTION
@@ -583,6 +588,113 @@ Example:
       },
    );
   }
+
+Lastly, experimentally you can use the C<Helper> attribute to define helpers in your view
+module.  This requires L<MooseX::MethodAttributes>.
+
+Example:
+
+  package MyApp::View::MyView;
+
+  use Moose;
+  use MooseX::MethodAttributes;
+
+  extends 'Catalyst::View::EmbeddedPerl::PerRequest';
+
+  sub my_helper :Helper {
+    my ($self, $c, $arg) = @_;
+    return "Hello $arg";
+  }
+
+  __PACKAGE__->meta->make_immutable;
+
+Please note that if you override a helper method in a subclass you currently need
+to also add the Helper attribute to the method in the subclass.
+
+=head1 TEMPLATE INHERITANCE
+
+This is an experimental feature that allows you to inherit from other views. When
+you inherit from a view, the parent's template automatically becomes the base template
+Example:
+
+    package Example::View::Base;
+
+    use Moose;
+    use MooseX::MethodAttributes;
+
+    extends 'Catalyst::View::EmbeddedPerl::PerRequest';
+
+    sub title :Helper { 'Missing title' }
+
+    sub styles {
+      my ($self, $cb) = @_;
+      my $styles = $self->content('css') || return '';
+      return $cb->($styles);
+    }
+
+    __PACKAGE__->meta->make_immutable;
+    __PACKAGE__->config(
+      auto_escape => 1,
+      content_type => 'text/html',
+    );
+    
+    __DATA__
+    <html>
+      <head>
+        <title><%= title() %></title>
+        %= $self->styles(sub {
+          <style>
+            %= shift
+          </style>
+        % })
+      </head>
+      <body>
+        <%= $content %>
+      </body>
+    </html>
+
+And an inheriting view:
+
+    package Example::View::Inherit;
+
+    use Moose;
+    use MooseX::MethodAttributes;
+
+    extends 'Example::View::Base';
+
+    has 'name' => (is => 'ro', isa => 'Str', export=>1);
+
+    sub title :Helper  { 'Inherited Title' }
+
+    __PACKAGE__->meta->make_immutable;
+    __DATA__
+    # Style content
+    % content_for('css', sub {
+          p { color: red; }
+    % });
+    # Main content
+      <p>hello <%= $name %></p>
+
+When called from a controller like this:
+
+    sub inherit :Local  {
+      my ($self, $c) = @_;
+      return $c->view('Inherit', name=>'joe')->http_ok;
+    }
+
+Produced output similar to:
+
+    <html>
+      <head>
+        <title>Inherited Title</title>
+        <style>
+          p { color: red; }
+        </style>
+      </head>
+      <body>
+        <p>hello joe</p>
+      </body>
+    </html>
 
 =head1 DEFAULT HELPERS
 
