@@ -33,7 +33,7 @@ Moose::Util::MetaRole::apply_metaroles(
 
 extends 'Catalyst::View::BasePerRequest';
 
-our $VERSION = 0.001009;
+our $VERSION = 0.001010;
 eval $VERSION;
 
 # Args that get passed cleanly to Template::EmbeddedPerl
@@ -226,6 +226,7 @@ sub default_helpers {
     content_append => sub { my ($self, $c, @args) = @_; return $self->content_append(@args); },
     content_prepend => sub { my ($self, $c, @args) = @_; return $self->content_prepend(@args); },
     content_replace => sub { my ($self, $c, @args) = @_; return $self->content_replace(@args); },
+    content_around => sub { my ($self, $c, @args) = @_; return $self->content_around(@args); },
   );
 }
 
@@ -316,7 +317,8 @@ sub view {
 # Rendered is always a string, never an array so no need to flatten
 around 'flatten_rendered' => sub {
   my ($orig, $self, @args) = @_;
-  return $args[0];
+  return $args[0] if scalar(@args) == 1;
+  return $self->safe_concat(@args);
 };
 
 __PACKAGE__->meta->make_immutable;
@@ -478,7 +480,7 @@ Used to capture blocks of template.  SEE:
 
 L<Catalyst::View::BasePerRequest/content>, L<Catalyst::View::BasePerRequest/content_for>,
 L<Catalyst::View::BasePerRequest/content_append>, L<Catalyst::View::BasePerRequest/content_prepend>,
-L<Catalyst::View::BasePerRequest/content_replace>.
+L<Catalyst::View::BasePerRequest/content_replace>, L<Catalyst::View::BasePerRequest/content_around>.
 
 =head2 Response Helpers
 
